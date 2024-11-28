@@ -1,10 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"errors"
+	"log"
+	"net/http"
+	"net/url"
+	"time"
+
+	"github.com/diamondburned/arikawa/v3/utils/httputil"
 
 	"github.com/ayn2op/discordo/internal/config"
 	"github.com/diamondburned/arikawa/v3/api"
+	"github.com/diamondburned/arikawa/v3/utils/httputil/httpdriver"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"github.com/zalando/go-keyring"
@@ -30,6 +38,7 @@ func newLoginForm(done doneFn, cfg *config.Config) *loginForm {
 	lf.AddInputField("Email", "", 0, nil, nil)
 	lf.AddPasswordField("Password", "", 0, 0, nil)
 	lf.AddPasswordField("Code (optional)", "", 0, 0, nil)
+	lf.AddInputField("Proxy", "", 0, nil, nil)
 	lf.AddCheckbox("Remember Me", true, nil)
 	lf.AddButton("Login", lf.login)
 
@@ -52,8 +61,35 @@ func (lf *loginForm) login() {
 		return
 	}
 
-	// Create a new API client without an authentication token.
-	apiClient := api.NewClient("")
+	proxy := lf.GetFormItem(3).(*tview.InputField).GetText()
+	var apiClient *api.Client
+	if proxy == "" {
+		apiClient = api.NewClient("")
+	} else {
+		// Create a new API client without an authentication token.
+		proxyURL, err := url.Parse(proxy)
+		if err != nil {
+			log.Println(err)
+		}
+
+		// //adding the proxy settings to the Transport object
+		transport := &http.Transport{
+			Proxy: http.ProxyURL(proxyURL),
+		}
+
+		// //adding the Transport object to the http Client
+		httpClient := &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: transport,
+		}
+		client := &httputil.Client{
+			Client:        httpdriver.WrapClient(*httpClient),
+			SchemaEncoder: &httputil.DefaultSchema{},
+			Retries:       httputil.Retries,
+		}
+		client.WithContext(context.Background())
+		apiClient = api.NewCustomClient("", client)
+	}
 	// Log in using the provided email and password.
 	lr, err := apiClient.Login(email, password)
 	if err != nil {
@@ -81,7 +117,7 @@ func (lf *loginForm) login() {
 		return
 	}
 
-	rememberMe := lf.GetFormItem(3).(*tview.Checkbox).IsChecked()
+	rememberMe := lf.GetFormItem(4).(*tview.Checkbox).IsChecked()
 	if rememberMe {
 		go func() {
 			if err := keyring.Set(config.Name, "token", lr.Token); err != nil {

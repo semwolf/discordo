@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"log"
 	"log/slog"
+	"os"
 
 	"github.com/ayn2op/discordo/cmd"
 	"github.com/ayn2op/discordo/internal/config"
@@ -10,6 +12,14 @@ import (
 )
 
 func main() {
+	f, err := os.OpenFile("logfile", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+
+	log.SetOutput(f)
+	log.Println("This is a test log entry")
 	token := flag.String("token", "", "authentication token")
 	flag.Parse()
 
