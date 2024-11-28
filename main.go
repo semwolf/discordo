@@ -19,7 +19,6 @@ func main() {
 	defer f.Close()
 
 	log.SetOutput(f)
-	log.Println("This is a test log entry")
 	token := flag.String("token", "", "authentication token")
 	flag.Parse()
 
